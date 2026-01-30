@@ -5,6 +5,13 @@ __pycache__/
 
 # C extensions
 *.so
+.vscode/
+.ruff_cache/
+.ruff_cache
+venv/
+venv
+pyproject.toml
+
 
 # Distribution / packaging
 .Python
