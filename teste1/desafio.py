@@ -4,46 +4,40 @@ from decimal import Decimal
 from io import StringIO
 
 import pandas as pd
+from validate_docbr import CNPJ
 
+cnpj = CNPJ()
 
-def valida_cnpj(cnpj):
-    # Limpa o dado: mantém apenas números, caso algum arquivo venha com formatação de um cnpj (11.222.333/0001-44)
-    cnpj = "".join(filter(str.isdigit, str(cnpj)))
+def salvar_zip_com_dados(df1, df2, caminho_zip):
+    # Salvar diretamente no zip, sem criar arquivos no disco
+    with zipfile.ZipFile(
+        os.path.join(script_dir, "Teste_davi_castro.zip"), "w", zipfile.ZIP_DEFLATED
+    ) as zipf:
+        # Escrever arquivo 1 no zip
+        buffer1 = StringIO()
+        df_final.to_csv(buffer1, index=False, sep=";", encoding="latin1", quoting=1)
+        zipf.writestr("despesas_consolidadas.csv", buffer1.getvalue())
 
-    # verifica se o CNPJ tem 14 dígitos.Verifica o conjunto (set) dos numeros, ou seja, se apresentar apenas um conjunto, signifca que todos os digitos sao iguais
-    if len(cnpj) != 14 or len(set(cnpj)) == 1:
-        return False  # CNPJ inválido
-
-    # Função interna para calcular cada dígito
-
-    def calcular_digito(fatia, pesos):
-        soma = sum(int(num) * peso for num, peso in zip(fatia, pesos))
-        resto = soma % 11
-        return 0 if resto < 2 else 11 - resto
-
-    # Pesos oficiais da Receita Federal
-    digito13 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]  # Para o 13º dígito
-    digito14 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]  # Para o 14º dígito
-
-    # Verifica o primeiro dígito verificador (13º digito)
-    if int(cnpj[12]) != calcular_digito(cnpj[:12], digito13):
-        return False
-
-    # Verifica o segundo dígito verificador (14º posição)
-    if int(cnpj[13]) != calcular_digito(cnpj[:13], digito14):
-        return False
-
-    return True
+        # Escrever arquivo 2 no zip
+        buffer2 = StringIO()
+        df_final_enriquecido.to_csv(
+            buffer2,
+            index=False,
+            sep=";",
+            encoding="latin1",
+            quoting=1,
+        )
+        zipf.writestr("despesas_consolidadas_enriquecidas.csv", buffer2.getvalue())
 
 
 # Obter o diretório do script para resolver caminhos de forma absoluta e evitar problemas de leitura de arquivos
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
-# 1. Preparação dos Mapas (Lookup Tables)
+# Preparação dos Mapas (Lookup Tables)
 arquivo_operadoras_df = pd.read_csv(
     os.path.join(script_dir, "Relatorio_cadop.csv"),
     sep=",",
-    encoding="latin1",
+    encoding="utf-8-sig",
     dtype={"CNPJ": str},
 )
 arquivo_operadoras = arquivo_operadoras_df.set_index("REGISTRO_OPERADORA").to_dict(
@@ -51,18 +45,10 @@ arquivo_operadoras = arquivo_operadoras_df.set_index("REGISTRO_OPERADORA").to_di
 )
 
 mapa_mes_tri = {
-    1: "1T",
-    2: "1T",
-    3: "1T",
-    4: "2T",
-    5: "2T",
-    6: "2T",
-    7: "3T",
-    8: "3T",
-    9: "3T",
-    10: "4T",
-    11: "4T",
-    12: "4T",
+    1: "1T", 2: "1T", 3: "1T",
+    4: "2T", 5: "2T", 6: "2T",
+    7: "3T", 8: "3T", 9: "3T",
+    10: "4T", 11: "4T", 12: "4T",
 }
 
 # Lista de arquivos trimestrais; 1.2
@@ -82,7 +68,7 @@ def consolidar_dados_despesas(lista_arquivos_trimestrais):
     for arquivo in lista_arquivos_trimestrais:
         # Processamento incremental (Chunking) para eficiência de memória
         for bloco in pd.read_csv(arquivo, chunksize=100000, sep=";", encoding="UTF-8"):
-            # Conversão de data e extração de Ano/Trimestre
+            # Conversão de data e extração de Ano/Trimestrebloco = bloco[bloco["CNPJ"].notna()].copy()
             datas = pd.to_datetime(bloco["DATA"], errors="coerce")
             bloco["ANO"] = datas.dt.year
             bloco["TRIMESTRE"] = datas.dt.month.map(mapa_mes_tri)
@@ -94,8 +80,12 @@ def consolidar_dados_despesas(lista_arquivos_trimestrais):
             # Mapeamento de CNPJ e Razão Social através do Join, utilizando o REG_ANS
             bloco["CNPJ"] = bloco["REG_ANS"].map(mapa_cnpj)
 
+            bloco = bloco[
+                bloco["CNPJ"].notna()
+            ].copy()  # Remove registros sem CNPJ mapeado
+
             # Valida os cnpjs
-            cnpjs_validos = bloco["CNPJ"].apply(valida_cnpj)
+            cnpjs_validos = bloco["CNPJ"].apply(cnpj.validate)
             bloco = bloco[cnpjs_validos].copy()  # Remove CNPJs inválidos
 
             bloco["RAZAO_SOCIAL"] = bloco["REG_ANS"].map(mapa_razao)
@@ -117,12 +107,7 @@ def consolidar_dados_despesas(lista_arquivos_trimestrais):
     # Consolidação Global dos dados
     df_despesas_consolidadas = pd.concat(lista_despesas, ignore_index=True)
     resultado_final = (
-        df_despesas_consolidadas.groupby(["CNPJ", "RAZAO_SOCIAL", "ANO", "TRIMESTRE"])[
-            "VL_SALDO_FINAL"
-        ]
-        .sum()
-        .reset_index()
-    )
+        df_despesas_consolidadas.groupby(["CNPJ", "RAZAO_SOCIAL", "ANO", "TRIMESTRE"])["VL_SALDO_FINAL"].sum().reset_index())
 
     # Renomeação das colunas conforme exigência do item 1.3
     resultado_final.columns = [
@@ -132,37 +117,15 @@ def consolidar_dados_despesas(lista_arquivos_trimestrais):
         "Trimestre",
         "Valor Despesas",
     ]
-    return resultado_final
 
+    return resultado_final
 
 df_final = consolidar_dados_despesas(arquivos)
 
 # Enriquecimento dos dados
-df_final_enriquecido = pd.merge(
-    df_final, arquivo_operadoras_df[["CNPJ", "Modalidade", "UF"]], on="CNPJ", how="left"
-)
+df_final_enriquecido = pd.merge(df_final, arquivo_operadoras_df[["CNPJ", "Modalidade", "UF"]], on="CNPJ", how="left")
 
-df_final_enriquecido["Modalidade"] = df_final_enriquecido["Modalidade"].fillna(
-    "NAO IDENTIFICADA"
-)
+df_final_enriquecido["Modalidade"] = df_final_enriquecido["Modalidade"].fillna("NAO IDENTIFICADA")
 df_final_enriquecido["UF"] = df_final_enriquecido["UF"].fillna("NAO IDENTIFICADA")
 
-# Salvar diretamente no zip, sem criar arquivos no disco
-with zipfile.ZipFile(
-    os.path.join(script_dir, "Teste_davi_castro.zip"), "w", zipfile.ZIP_DEFLATED
-) as zipf:
-    # Escrever arquivo 1 no zip
-    buffer1 = StringIO()
-    df_final.to_csv(buffer1, index=False, sep=";", encoding="utf-8-sig", quoting=1)
-    zipf.writestr("despesas_consolidadas.csv", buffer1.getvalue())
-
-    # Escrever arquivo 2 no zip
-    buffer2 = StringIO()
-    df_final_enriquecido.to_csv(
-        buffer2,
-        index=False,
-        sep=";",
-        encoding="utf-8-sig",
-        quoting=1,
-    )
-    zipf.writestr("despesas_consolidadas_enriquecidas.csv", buffer2.getvalue())
+salvar_zip_com_dados(df_final, df_final_enriquecido, script_dir)
