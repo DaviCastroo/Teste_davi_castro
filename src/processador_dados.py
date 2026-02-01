@@ -6,30 +6,35 @@ from io import StringIO
 import pandas as pd
 from validate_docbr import CNPJ
 
+from config import PROCESSED_DIR, RAW_DIR
+
 cnpj = CNPJ()
 
-def salvar_zip_com_dados(df1, df2, caminho_zip):
+def salvar_zip_com_dados(df1, df2, df3, caminho_zip):
     # Salvar diretamente no zip, sem criar arquivos no disco
     with zipfile.ZipFile(
-        os.path.join(script_dir, "Teste_davi_castro.zip"), "w", zipfile.ZIP_DEFLATED
+        os.path.join(PROCESSED_DIR, "Teste_davi_castro.zip"), "w", zipfile.ZIP_DEFLATED
     ) as zipf:
         # Escrever arquivo 1 no zip
         buffer1 = StringIO()
-        df_final.to_csv(buffer1, index=False, sep=";", encoding="latin1", quoting=1)
+        df1.to_csv(buffer1, index=False, sep=";", encoding="latin1", quoting=1)
         zipf.writestr("despesas_consolidadas.csv", buffer1.getvalue())
 
         # Escrever arquivo 2 no zip
         buffer2 = StringIO()
-        df_final_enriquecido.to_csv(buffer2, index=False, sep=";", encoding="latin1", quoting=1,)
+        df2.to_csv(buffer2, index=False, sep=";", encoding="latin1", quoting=1,)
         zipf.writestr("despesas_consolidadas_enriquecidas.csv", buffer2.getvalue())
+
+        buffer3 = StringIO()
+        df3.to_csv(buffer3, index=False, sep=";", encoding="utf-8", quoting=1)
+        zipf.writestr("despesas_agregadas.csv", buffer3.getvalue())
 
 
 # Obter o diretório do script para resolver caminhos de forma absoluta e evitar problemas de leitura de arquivos
-script_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Preparação dos Mapas (Lookup Tables)
 arquivo_operadoras_df = pd.read_csv(
-    os.path.join(script_dir, "Relatorio_cadop.csv"),
+    os.path.join(RAW_DIR, "Relatorio_cadop.csv"),
     sep=",",
     encoding="utf-8-sig",
     dtype={"CNPJ": str},
@@ -47,9 +52,9 @@ mapa_mes_tri = {
 
 # Lista de arquivos trimestrais; 1.2
 arquivos = [
-    os.path.join(script_dir, "1T2025.csv"),
-    os.path.join(script_dir, "2T2025.csv"),
-    os.path.join(script_dir, "3T2025.csv"),
+    os.path.join(RAW_DIR, "1T2025.csv"),
+    os.path.join(RAW_DIR, "2T2025.csv"),
+    os.path.join(RAW_DIR, "3T2025.csv"),
 ]
 
 mapa_cnpj = {ans: dados["CNPJ"] for ans, dados in arquivo_operadoras.items()}
@@ -105,7 +110,7 @@ def consolidar_dados_despesas(lista_arquivos_trimestrais):
     resultado_final = df_despesas_consolidadas.groupby(["CNPJ", "RAZAO_SOCIAL", "ANO", "TRIMESTRE"])["VL_SALDO_FINAL"].sum().reset_index()
 
     # Renomeação das colunas conforme exigência do item 1.3
-    resultado_final.columns = ["CNPJ","RazaoSocial","Ano","Trimestre","Valor Despesas"]
+    resultado_final.columns = ["CNPJ","RazaoSocial","Ano","Trimestre","ValorDespesas"]
 
     return resultado_final
 
@@ -113,9 +118,12 @@ def consolidar_dados_despesas(lista_arquivos_trimestrais):
 df_final = consolidar_dados_despesas(arquivos)
 
 # Enriquecimento dos dados
-df_final_enriquecido = pd.merge(df_final, arquivo_operadoras_df[["CNPJ", "Modalidade", "UF"]], on="CNPJ", how="left")
+df_final_enriquecido = pd.merge(df_final, arquivo_operadoras_df[["CNPJ", "REGISTRO_OPERADORA", "Modalidade", "UF"]], on="CNPJ", how="left")
 
 df_final_enriquecido["Modalidade"] = df_final_enriquecido["Modalidade"].fillna("NAO IDENTIFICADA")
 df_final_enriquecido["UF"] = df_final_enriquecido["UF"].fillna("NAO IDENTIFICADA")
 
-salvar_zip_com_dados(df_final, df_final_enriquecido, script_dir)
+df_agregado = df_final_enriquecido.groupby(["RazaoSocial", "UF"])["ValorDespesas"].agg(Total_Despesas='sum', Media_Trimestral='mean', Desvio_Padrao='std').reset_index()
+df_agregado = df_agregado.sort_values(by="Total_Despesas", ascending=False)
+
+salvar_zip_com_dados(df_final, df_final_enriquecido,df_agregado, PROCESSED_DIR)
