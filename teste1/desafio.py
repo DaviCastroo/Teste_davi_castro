@@ -20,13 +20,7 @@ def salvar_zip_com_dados(df1, df2, caminho_zip):
 
         # Escrever arquivo 2 no zip
         buffer2 = StringIO()
-        df_final_enriquecido.to_csv(
-            buffer2,
-            index=False,
-            sep=";",
-            encoding="latin1",
-            quoting=1,
-        )
+        df_final_enriquecido.to_csv(buffer2, index=False, sep=";", encoding="latin1", quoting=1,)
         zipf.writestr("despesas_consolidadas_enriquecidas.csv", buffer2.getvalue())
 
 
@@ -55,7 +49,6 @@ mapa_mes_tri = {
 arquivos = [
     os.path.join(script_dir, "1T2025.csv"),
     os.path.join(script_dir, "2T2025.csv"),
-    
     os.path.join(script_dir, "3T2025.csv"),
 ]
 
@@ -71,7 +64,7 @@ def consolidar_dados_despesas(lista_arquivos_trimestrais):
         for bloco in pd.read_csv(arquivo, chunksize=100000, sep=";", encoding="UTF-8"):
             resumo_bloco = []
             
-            # Conversão de data e extração de Ano/Trimestrebloco = bloco[bloco["CNPJ"].notna()].copy()
+            # Conversão de data e extração de Ano/Trimestre
             datas = pd.to_datetime(bloco["DATA"], errors="coerce")
             bloco["ANO"] = datas.dt.year
             bloco["TRIMESTRE"] = datas.dt.month.map(mapa_mes_tri)
@@ -83,10 +76,8 @@ def consolidar_dados_despesas(lista_arquivos_trimestrais):
             # Mapeamento de CNPJ e Razão Social através do Join, utilizando o REG_ANS
             bloco["CNPJ"] = bloco["REG_ANS"].map(mapa_cnpj)
 
-            bloco = bloco[
-                bloco["CNPJ"].notna()
-            ].copy()  # Remove registros sem CNPJ mapeado
-
+            bloco = bloco[bloco["CNPJ"].notna()].copy()  # Copia os regisos com CNPJ mapeado
+            
             # Valida os cnpjs
             cnpjs_validos = bloco["CNPJ"].apply(cnpj.validate)
             bloco = bloco[cnpjs_validos].copy()  # Remove CNPJs inválidos
@@ -100,7 +91,7 @@ def consolidar_dados_despesas(lista_arquivos_trimestrais):
 
             # Conversão numérica (Troca a vírgula por ponto, devido ao formato que a linguagem entende, que é utilizando o ponto)
             if bloco["VL_SALDO_FINAL"].dtype == object:
-                bloco["VL_SALDO_FINAL"] = (bloco["VL_SALDO_FINAL"].str.replace(",", ".").apply(Decimal)  
+                bloco["VL_SALDO_FINAL"] = (bloco["VL_SALDO_FINAL"].str.replace(",", ".").apply(Decimal)
             )  
 
             #AGREGAÇÃO LOCAL DOS DADOS (DENTRO DO LOOP DE CHUNKS)
