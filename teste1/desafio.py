@@ -55,6 +55,7 @@ mapa_mes_tri = {
 arquivos = [
     os.path.join(script_dir, "1T2025.csv"),
     os.path.join(script_dir, "2T2025.csv"),
+    
     os.path.join(script_dir, "3T2025.csv"),
 ]
 
@@ -68,6 +69,8 @@ def consolidar_dados_despesas(lista_arquivos_trimestrais):
     for arquivo in lista_arquivos_trimestrais:
         # Processamento incremental (Chunking) para eficiência de memória
         for bloco in pd.read_csv(arquivo, chunksize=100000, sep=";", encoding="UTF-8"):
+            resumo_bloco = []
+            
             # Conversão de data e extração de Ano/Trimestrebloco = bloco[bloco["CNPJ"].notna()].copy()
             datas = pd.to_datetime(bloco["DATA"], errors="coerce")
             bloco["ANO"] = datas.dt.year
@@ -97,29 +100,25 @@ def consolidar_dados_despesas(lista_arquivos_trimestrais):
 
             # Conversão numérica (Troca a vírgula por ponto, devido ao formato que a linguagem entende, que é utilizando o ponto)
             if bloco["VL_SALDO_FINAL"].dtype == object:
-                bloco["VL_SALDO_FINAL"] = (
-                    bloco["VL_SALDO_FINAL"].str.replace(",", ".").apply(Decimal)
-                )  # Uso do tipo de dado "decimal" para manter a precisão
+                bloco["VL_SALDO_FINAL"] = (bloco["VL_SALDO_FINAL"].str.replace(",", ".").apply(Decimal)  
+            )  
 
+            #AGREGAÇÃO LOCAL DOS DADOS (DENTRO DO LOOP DE CHUNKS)
+            resumo_bloco = bloco.groupby(["CNPJ", "RAZAO_SOCIAL", "ANO", "TRIMESTRE"])["VL_SALDO_FINAL"].sum().reset_index() # Agrupamento e soma das despesas no bloco atual, evita manter dados desnecessários na memória
             # Agregação local (reduz o tamanho da lista_despesas)
-            lista_despesas.append(bloco)
+            lista_despesas.append(resumo_bloco)
 
     # Consolidação Global dos dados
     df_despesas_consolidadas = pd.concat(lista_despesas, ignore_index=True)
-    resultado_final = (
-        df_despesas_consolidadas.groupby(["CNPJ", "RAZAO_SOCIAL", "ANO", "TRIMESTRE"])["VL_SALDO_FINAL"].sum().reset_index())
+    
+    resultado_final = df_despesas_consolidadas.groupby(["CNPJ", "RAZAO_SOCIAL", "ANO", "TRIMESTRE"])["VL_SALDO_FINAL"].sum().reset_index()
 
     # Renomeação das colunas conforme exigência do item 1.3
-    resultado_final.columns = [
-        "CNPJ",
-        "RazaoSocial",
-        "Ano",
-        "Trimestre",
-        "Valor Despesas",
-    ]
+    resultado_final.columns = ["CNPJ","RazaoSocial","Ano","Trimestre","Valor Despesas"]
 
     return resultado_final
 
+# Chamada da função de consolidação
 df_final = consolidar_dados_despesas(arquivos)
 
 # Enriquecimento dos dados
