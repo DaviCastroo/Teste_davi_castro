@@ -12,7 +12,8 @@ venv/
 venv
 pyproject.toml
 
-
+__pycache__
+__pycache__/
 # Distribution / packaging
 .Python
 build/
@@ -179,6 +180,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+config/
 
 # Cursor  
 #  Cursor is an AI-powered code editor.`.cursorignore` specifies files/directories to 
