@@ -1,5 +1,6 @@
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.staticfiles import StaticFiles
 
 from src.api.schemas import (
     DespesaSchema,
@@ -7,29 +8,32 @@ from src.api.schemas import (
     OperadoraSchema,
     PaginaOperadoras,
 )
-
-from ..database.loader import get_engine
+from src.config import FRONTEND_PATH
+from src.database.loader import get_engine
 
 app = FastAPI()
  
 @app.get("/api/operadoras", response_model=PaginaOperadoras)
-def list_operadoras(busca: str = Query("", min_length=0), page: int = Query(1, gt=0), limit: int = Query(10, le=100)):
+def list_operadoras(page: int = Query(1, gt=0), limit: int = Query(10, le=1000), cnpj: str = Query("")):
     engine = get_engine
     offset = (page - 1) * limit
 
-    sql_query = "SELECT * FROM operadoras ORDER BY registro_ans"
-
-    # Obter total de registros
-    total_query = "SELECT COUNT(*) as total FROM operadoras"
-    if busca:
-        total_query += f" WHERE razao_social ILIKE '%{busca}%' OR cnpj ILIKE '%{busca}%'"
+    # Construir query com filtro opcional de CNPJ
+    where_clause = ""
+    params = ()
     
-    total_result = pd.read_sql(total_query, con=engine)
+    if cnpj:
+        where_clause = "WHERE cnpj LIKE %s"
+        params = (f"%{cnpj}%",)
+    
+    # Obter total de registros
+    total_query = f"SELECT COUNT(*) as total FROM operadoras {where_clause}"
+    total_result = pd.read_sql(total_query, con=engine, params=params)
     total_registros = int(total_result['total'].iloc[0])
     
     # Aplicar paginação
-    sql_query += f" LIMIT {limit} OFFSET {offset}"
-    operadoras = pd.read_sql(sql_query, con=engine)
+    sql_query = f"SELECT * FROM operadoras {where_clause} ORDER BY registro_ans LIMIT {limit} OFFSET {offset}"
+    operadoras = pd.read_sql(sql_query, con=engine, params=params)
     
     # Converter CNPJ para string (garante compatibilidade com schema)
     operadoras['cnpj'] = operadoras['cnpj'].astype(str)
@@ -42,14 +46,14 @@ def list_operadoras(busca: str = Query("", min_length=0), page: int = Query(1, g
     }
 
 
-@app.get("/api/despesas/{cnpj}", response_model=OperadoraSchema)
-def list_operadora_cnpj(cnpj: str):
+@app.get("/api/operadoras/{cnpj}", response_model=OperadoraSchema)
+def get_operadora_detalhes(cnpj: str):
     engine = get_engine
 
-    # Primeiro buscar o registro_ans pelo CNPJ
+    # Buscar operadora pelo CNPJ
     sql_query = "SELECT * FROM operadoras WHERE cnpj = %s"
     operadora = pd.read_sql(sql_query, con=engine, params=(cnpj,))
-    
+
     if operadora.empty:
         raise HTTPException(status_code=404, detail="Operadora não encontrada")
         
@@ -57,7 +61,7 @@ def list_operadora_cnpj(cnpj: str):
     return operadora.iloc[0].to_dict()
 
 
-@app.get("/api/operadora/{cnpj}/despesas", response_model=list[DespesaSchema])
+@app.get("/api/operadoras/{cnpj}/despesas", response_model=list[DespesaSchema])
 def list_despesas_operadora(cnpj: str):    
     engine = get_engine
 
@@ -70,14 +74,13 @@ def list_despesas_operadora(cnpj: str):
     
     registro_ans = int(operadora.iloc[0]['registro_ans'])
     
-    sql_despesas = f"SELECT * FROM despesas WHERE registro_ans = {registro_ans} ORDER BY ano, trimestre"
-    despesas = pd.read_sql(sql_despesas, con=engine, params=(operadora.iloc[0]['registro_ans'],))
+    sql_despesas = "SELECT * FROM despesas WHERE registro_ans = %s ORDER BY ano, trimestre"
+    despesas = pd.read_sql(sql_despesas, con=engine, params=(registro_ans,))
 
     if despesas.empty:
         return []
     
     return despesas.to_dict(orient="records")
-
 
 @app.get("/api/estatisticas", response_model=EstatisticasSchema)
 def get_estatisticas():
@@ -95,14 +98,15 @@ def get_estatisticas():
     total = df_geral['total'].iloc[0]
     media = df_geral['media'].iloc[0]
 
-    sql_top5 = """SELECT o.razao_social, 
+    sql_top5 = """SELECT o.razao_social, o.cnpj,
     SUM(d.valor_despesas) as total 
     FROM despesas d JOIN operadoras o
     ON d.registro_ans = o.registro_ans 
-    GROUP BY o.razao_social ORDER BY total 
+    GROUP BY o.razao_social, o.cnpj ORDER BY total 
     DESC LIMIT 5""" 
     
     df_top5 = pd.read_sql(sql_top5, con=engine)
+    df_top5['cnpj'] = df_top5['cnpj'].astype(str)
     
     lista_top5 = df_top5.to_dict(orient="records")
 
@@ -111,3 +115,5 @@ def get_estatisticas():
         "media_por_lancamento": media,
         "top_5": lista_top5
         }
+
+app.mount("/", StaticFiles(directory=FRONTEND_PATH, html=True), name="static")

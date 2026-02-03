@@ -29,6 +29,7 @@ class PaginaOperadoras(BaseModel):
 
 class TopOperadorasSchema(BaseModel):
     razao_social: str
+    cnpj: str
     total: float
 
 # Esquema Estatísticas

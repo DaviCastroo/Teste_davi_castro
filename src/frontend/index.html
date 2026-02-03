@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoramento ANS | Intuitive Care</title>
+
+    <link rel="icon" sizes="192x192"
+        href="https://static.wixstatic.com/shapes/b91e09_ec91bf90beb448e39fbdf22214043a7f.svg" type="image/svg+xml">
+
+    <link rel="stylesheet" href="css/styles.css?v=3">
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+
+<body>
+
+    <div id="app" class="container">
+
+        <header class="header">
+            <div class="header-left">
+                <img src="logo.svg" alt="Logo" class="logo">
+                <h1>Monitoramento ANS</h1>
+            </div>
+            <div class="api-status" :class="apiStatusClass">
+                API: {{ apiStatusText }}
+            </div>
+        </header>
+
+        <nav class="nav-bar">
+            <button class="nav-btn" :class="{ active: viewAtual === 'dashboard' }" @click="navegarPara('dashboard')">
+                Dashboard
+            </button>
+            <button class="nav-btn" :class="{ active: viewAtual === 'operadoras' }" @click="navegarPara('operadoras')">
+                Buscar Operadoras
+            </button>
+        </nav>
+
+        <main v-show="viewAtual === 'dashboard'" class="view-section active">
+
+            <div v-if="loadingStats" class="loading-box">
+                Atualizando indicadores do mercado...
+            </div>
+
+            <div v-else-if="erroStats" class="error-box">
+                <span>⚠️</span> {{ erroStats }}
+            </div>
+
+            <div v-else class="stats-content">
+                <div class="stats-grid">
+                    <div class="card highlight card-small">
+                        <h3>Total de Despesas (2025)</h3>
+                        <div class="big-number" :style="calcularEstiloDinamico(formatMoney(stats.total_geral))">{{
+                            formatMoney(stats.total_geral) }}</div>
+                        <small>Soma consolidada de todos os trimestres</small>
+                    </div>
+
+                    <div class="card highlight card-small">
+                        <h3>Ticket Médio</h3>
+                        <div class="big-number"
+                            :style="calcularEstiloDinamico(formatMoney(stats.media_por_lancamento))">{{
+                            formatMoney(stats.media_por_lancamento) }}</div>
+                        <small>Valor médio por lançamento contábil</small>
+                    </div>
+
+                    <div class="card">
+                        <h3> Top 5 Maiores Operadoras</h3>
+                        <ul class="top5-list">
+                            <li v-for="(op, index) in stats.top_5" :key="index" @click="abrirModalTop5(op)"
+                                class="top5-item">
+                                <span class="top5-rank">{{ index + 1 }}</span>
+                                <span style="flex: 1; margin-right: 10px;">
+                                    {{ op.razao_social.substring(0, 25) }}...
+                                </span>
+                                <strong>{{ formatMoney(op.total) }}</strong>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <main v-show="viewAtual === 'operadoras'" class="view-section active">
+
+            <div class="search-box">
+                <input v-model="termoBusca" @input="buscarEmTempoReal" @keyup.enter="buscarOperadoras(1)"
+                    placeholder="Digite o CNPJ da operadora..." autofocus maxlength="14">
+                <button class="btn-primary" @click="buscarOperadoras(1)" :disabled="loadingOps">
+                    {{ loadingOps ? 'Pesquisando...' : 'Buscar' }}
+                </button>
+            </div>
+
+            <div v-if="erroOps" class="error-box">
+                <span></span> {{ erroOps }}
+            </div>
+
+            <div v-if="!loadingOps && operadoras.length === 0 && iniciouBusca" class="loading-box">
+                Nenhuma operadora encontrada para este termo.
+            </div>
+
+            <div class="operators-list">
+                <div v-for="op in operadoras" :key="op.registro_ans" class="operator-card">
+
+                    <div class="operator-header">
+                        <div class="op-info">
+                            <h3>{{ op.razao_social }}</h3>
+                            <div class="op-meta">
+                                <span>CNPJ: {{ op.cnpj }}</span>
+                                <span>Registro ANS: {{ op.registro_ans }}</span>
+                                <span>UF: {{ op.uf }}</span>
+                            </div>
+                        </div>
+                        <button class="btn-toggle" @click="abrirModal(op)">
+                            Ver Detalhes
+                        </button>
+                    </div>
+
+                    <div v-if="false" class="expenses-area">
+
+                        <div v-if="loadingDespesas[op.registro_ans]" class="loading-box" style="padding: 10px;">
+                            Carregando histórico financeiro...
+                        </div>
+
+                        <div v-else-if="cacheDespesas[op.cnpj] && cacheDespesas[op.cnpj].length > 0">
+                            <table class="expenses-table">
+                                <thead>
+                                    <tr>
+                                        <th>Ano</th>
+                                        <th>Trimestre</th>
+                                        <th>Valor Despesas</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(d, idx) in cacheDespesas[op.cnpj]" :key="idx">
+                                        <td>{{ d.ano }}</td>
+                                        <td>{{ d.trimestre }}</td>
+                                        <td>{{ formatMoney(d.valor_despesas) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div v-else class="loading-box" style="padding: 10px; font-size: 0.9em;">
+                            Esta operadora não reportou despesas assistenciais (Conta 411) neste período.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pagination" v-if="operadoras.length > 0">
+                <button @click="mudarPagina(-1)" :disabled="page === 1">Anterior</button>
+                <span>Página <strong>{{ page }}</strong> de {{ totalPages }}</span>
+                <button @click="mudarPagina(1)" :disabled="page >= totalPages">Próxima</button>
+            </div>
+
+        </main>
+
+        <!-- MODAL DE DETALHES DA OPERADORA -->
+        <div v-if="modalAberto" class="modal-overlay" @click="fecharModal">
+            <div class="modal-content" @click.stop>
+                <div class="modal-header">
+                    <h2>{{ operadoraSelecionada?.razao_social }}</h2>
+                    <button class="btn-close" @click="fecharModal">✕</button>
+                </div>
+
+                <div v-if="carregandoOperadora" class="modal-body">
+                    <div class="loading-box">Carregando detalhes...</div>
+                </div>
+
+                <div v-else class="modal-body">
+                    <div class="detalhes-operadora">
+                        <div class="info-group">
+                            <label>CNPJ:</label>
+                            <span>{{ operadoraSelecionada?.cnpj }}</span>
+                        </div>
+                        <div class="info-group">
+                            <label>Registro ANS:</label>
+                            <span>{{ operadoraSelecionada?.registro_ans }}</span>
+                        </div>
+                        <div class="info-group">
+                            <label>UF:</label>
+                            <span>{{ operadoraSelecionada?.uf }}</span>
+                        </div>
+                        <div class="info-group">
+                            <label>Modalidade:</label>
+                            <span>{{ operadoraSelecionada?.modalidade }}</span>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-top: 20px; margin-bottom: 15px;">Histórico de Despesas</h3>
+
+                    <div v-if="cacheDespesas[operadoraSelecionada?.cnpj] && cacheDespesas[operadoraSelecionada?.cnpj].length > 0"
+                        class="expenses-container">
+                        <div v-for="(d, idx) in cacheDespesas[operadoraSelecionada?.cnpj]" :key="idx"
+                            class="expense-card">
+                            <div class="expense-row">
+                                <div class="expense-item">
+                                    <span class="expense-label">Ano</span>
+                                    <span class="expense-value">{{ d.ano }}</span>
+                                </div>
+                                <div class="expense-item">
+                                    <span class="expense-label">Trimestre</span>
+                                    <span class="expense-value">{{ d.trimestre }}</span>
+                                </div>
+                                <div class="expense-item expense-value-main">
+                                    <span class="expense-label">Valor Despesas</span>
+                                    <span class="expense-value">{{ formatMoney(d.valor_despesas) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-else class="loading-box" style="padding: 10px; font-size: 0.9em;">
+                        Esta operadora não reportou despesas assistenciais (Conta 411) neste período.
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- FOOTER -->
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>Monitoramento ANS</h4>
+                    <p>Plataforma de análise de despesas de operadoras de saúde suplementar</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Links</h4>
+                    <ul>
+                        <li><a href="#" @click="navegarPara('dashboard')">Dashboard</a></li>
+                        <li><a href="#" @click="navegarPara('operadoras')">Operadoras</a></li>
+                        <li><a href="http://localhost:8000/docs#/default" target="_blank">Documentação</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Contato</h4>
+                    <p>Suporte: davic.b.c.r@gmail.com</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 Monitoramento ANS. Todos os direitos reservados.</p>
+            </div>
+        </footer>
+    </div>
+
+    <script src="js/app.js"></script>
+
+</body>
+
+</html>
