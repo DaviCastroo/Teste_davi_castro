@@ -18,12 +18,12 @@ def salvar_zip_com_dados(df1, df2, df3, caminho_zip):
         # Escrever arquivo 1 no zip
         buffer1 = StringIO()
         df1.to_csv(buffer1, index=False, sep=";", encoding="latin1", quoting=1)
-        zipf.writestr("despesas_consolidadas.csv", buffer1.getvalue())
+        zipf.writestr("consolidado_despesas.csv", buffer1.getvalue())
 
         # Escrever arquivo 2 no zip
         buffer2 = StringIO()
         df2.to_csv(buffer2, index=False, sep=";", encoding="latin1", quoting=1,)
-        zipf.writestr("despesas_consolidadas_enriquecidas.csv", buffer2.getvalue())
+        zipf.writestr("despesas_agregadas_enriquecidas.csv", buffer2.getvalue())
 
         buffer3 = StringIO()
         df3.to_csv(buffer3, index=False, sep=";", encoding="utf-8", quoting=1)

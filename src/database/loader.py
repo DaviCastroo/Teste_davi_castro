@@ -27,7 +27,7 @@ df_operadoras_db.to_sql('operadoras', con=get_engine, if_exists='replace', index
 
 # TABELA DESPESAS
 with zipfile.ZipFile(os.path.join(PROCESSED_DIR, "Teste_davi_castro.zip")) as z:
-    with z.open("despesas_consolidadas_enriquecidas.csv") as f:
+    with z.open("despesas_agregadas_enriquecidas.csv") as f:
         df_despesas = pd.read_csv(f, sep=";")
 
 df_despesas_db = df_despesas[["REGISTRO_OPERADORA", "Ano", "Trimestre", "ValorDespesas"]].copy()
