@@ -1,14 +1,13 @@
 const { createApp } = Vue;
 
 // CONFIGURAÇÃO
-// Se a API estiver em outra porta, altere aqui.
 const API_BASE_URL = "http://localhost:8000/api";
 
 createApp({
     data() {
         return {
             // --- ESTADO DA APLICAÇÃO ---
-            viewAtual: 'dashboard', // Controla qual aba está visível
+            viewAtual: 'dashboard',
             apiStatusText: 'Conectando...',
             apiStatusClass: '',
 
@@ -21,6 +20,10 @@ createApp({
             loadingStats: false,
             erroStats: null,
 
+            // --- DADOS DO GRÁFICO (NOVO) ---
+            chartInstance: null,
+            dadosGrafico: [],
+
             // --- DADOS DE BUSCA ---
             termoBusca: "",
             operadoras: [],
@@ -29,17 +32,15 @@ createApp({
             totalRegistros: 0,
             loadingOps: false,
             erroOps: null,
-            iniciouBusca: false, // Para não mostrar "Nenhum resultado" ao abrir a tela
-            searchTimeout: null, // Para debounce da busca
+            iniciouBusca: false,
+            searchTimeout: null,
 
-            // --- DADOS DE DETALHES (DESPESAS) ---
-            // Cache: { '12345678000100': [ ...array de despesas... ] }
+            // --- DADOS DE DETALHES ---
             cacheDespesas: {},
-            // Estado visual: { 321456: true } (Registro ANS -> Boolean)
             despesasAbertas: {},
             loadingDespesas: {},
 
-            // --- MODAL DE DETALHES ---
+            // --- MODAL ---
             modalAberto: false,
             operadoraSelecionada: null,
             carregandoOperadora: false
@@ -56,6 +57,16 @@ createApp({
         navegarPara(view) {
             this.viewAtual = view;
             window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            // Re-renderiza o gráfico (Top 10) ao voltar para o dashboard
+            if (view === 'dashboard' && this.dadosGrafico.length > 0) {
+                setTimeout(() => {
+                    const top10 = this.dadosGrafico.slice(0, 10);
+                    const labels = top10.map(item => item.uf);
+                    const values = top10.map(item => item.total);
+                    this.renderizarChart(labels, values);
+                }, 100);
+            }
         },
 
         formatMoney(value) {
@@ -66,17 +77,12 @@ createApp({
         calcularEstiloDinamico(numero) {
             const texto = String(numero);
             const tamanho = texto.length;
-
-            // Calcula font-size progressivo baseado no comprimento
             let fontSize;
             if (tamanho <= 12) fontSize = '3rem';
             else if (tamanho <= 18) fontSize = '2.4rem';
             else if (tamanho <= 24) fontSize = '2rem';
             else fontSize = '1.5rem';
-
-            // Calcula width baseado no número de caracteres (aproximado)
             const width = Math.max(14, tamanho * 0.58 + 1) + 'em';
-
             return {
                 fontSize: fontSize,
                 width: width,
@@ -104,12 +110,84 @@ createApp({
             }
         },
 
+        // --- MÉTODO PARA CARREGAR DADOS DO GRÁFICO ---
+        async carregarGrafico() {
+            try {
+                const response = await axios.get(`${API_BASE_URL}/estatisticas/uf`);
+                const dados = response.data; // Todos os dados
+
+                this.dadosGrafico = dados; // Salva TODOS para a lista abaixo
+
+                // ALTERAÇÃO: Voltamos a usar slice(0, 10) APENAS para o gráfico
+                const top10 = dados.slice(0, 10);
+                const labels = top10.map(d => d.uf);
+                const values = top10.map(d => d.total);
+
+                this.renderizarChart(labels, values);
+
+            } catch (e) {
+                console.error("Erro ao carregar gráfico de UFs:", e);
+            }
+        },
+
+        // --- RENDERIZAR CHART.JS ---
+        renderizarChart(labels, values) {
+            const ctx = document.getElementById('graficoUF');
+            if (!ctx) return;
+
+            if (this.chartInstance) {
+                this.chartInstance.destroy();
+            }
+
+            this.chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Total de Despesas',
+                        data: values,
+                        backgroundColor: '#3498db',
+                        borderColor: '#2980b9',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => this.formatMoney(context.raw)
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#f0f0f0' },
+                            ticks: {
+                                callback: function (value) {
+                                    if (value >= 1000000000) return (value / 1000000000).toFixed(1) + 'B';
+                                    if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
+                                    return value;
+                                }
+                            }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        },
+
         // --- BUSCA DE OPERADORAS ---
         async buscarOperadoras(novaPagina) {
             this.loadingOps = true;
             this.erroOps = null;
             this.iniciouBusca = true;
-
             if (novaPagina) this.page = novaPagina;
 
             try {
@@ -120,13 +198,9 @@ createApp({
                         limit: this.limit
                     }
                 });
-
                 this.operadoras = response.data.items;
                 this.totalRegistros = response.data.total;
-
-                // Scroll para o topo da página
                 window.scrollTo(0, 0);
-
             } catch (error) {
                 console.error("Erro na busca:", error);
                 this.erroOps = "Falha ao buscar dados. Tente novamente.";
@@ -136,10 +210,7 @@ createApp({
         },
 
         buscarEmTempoReal() {
-            // Limpa timeout anterior
             clearTimeout(this.searchTimeout);
-
-            // Define novo timeout para fazer a busca (debounce de 300ms)
             this.searchTimeout = setTimeout(() => {
                 this.buscarOperadoras(1);
             }, 300);
@@ -152,55 +223,35 @@ createApp({
             }
         },
 
-        // --- DETALHES E CACHE ---
         async toggleDespesas(op) {
             const id = op.registro_ans;
             const cnpj = op.cnpj;
-
-            // 1. Toggle Visual (Abrir/Fechar)
             if (this.despesasAbertas[id]) {
                 this.despesasAbertas[id] = false;
-                return; // Se fechou, não precisa fazer mais nada
-            }
-            this.despesasAbertas[id] = true;
-
-            // 2. Verifica Cache (Economia de Requisição)
-            if (this.cacheDespesas[cnpj]) {
-                console.log(`Usando cache para ${op.razao_social}`);
                 return;
             }
-
-            // 3. Busca na API se não tiver no cache
+            this.despesasAbertas[id] = true;
+            if (this.cacheDespesas[cnpj]) return;
             this.loadingDespesas[id] = true;
             try {
                 const response = await axios.get(`${API_BASE_URL}/operadoras/${cnpj}/despesas`);
-                // Salva no cache indexado pelo CNPJ
                 this.cacheDespesas[cnpj] = response.data;
             } catch (error) {
-                console.error("Erro ao buscar despesas:", error);
-                // Mesmo com erro, salvamos array vazio para evitar loop infinito de erros
                 this.cacheDespesas[cnpj] = [];
-                alert("Não foi possível carregar os detalhes desta operadora.");
+                alert("Não foi possível carregar os detalhes.");
             } finally {
                 this.loadingDespesas[id] = false;
             }
         },
 
-        // --- MODAL ---
         async abrirModal(operadora) {
             this.operadoraSelecionada = operadora;
             this.modalAberto = true;
             this.carregandoOperadora = true;
-
-            // Bloqueia scroll da página
             document.body.style.overflow = 'hidden';
-
             try {
-                // Buscar detalhes completos da operadora
                 const response = await axios.get(`${API_BASE_URL}/operadoras/${operadora.cnpj}`);
                 this.operadoraSelecionada = response.data;
-
-                // Carregar despesas se não estão em cache
                 if (!this.cacheDespesas[operadora.cnpj]) {
                     const despesasResponse = await axios.get(`${API_BASE_URL}/operadoras/${operadora.cnpj}/despesas`);
                     this.cacheDespesas[operadora.cnpj] = despesasResponse.data;
@@ -213,26 +264,19 @@ createApp({
         },
 
         async abrirModalTop5(operadoraTop5) {
-            // operadoraTop5 agora contém razao_social, cnpj e total
             this.modalAberto = true;
             this.carregandoOperadora = true;
-
-            // Bloqueia scroll da página
             document.body.style.overflow = 'hidden';
-
             try {
-                // Buscar detalhes da operadora diretamente pelo CNPJ
                 const response = await axios.get(`${API_BASE_URL}/operadoras/${operadoraTop5.cnpj}`);
                 this.operadoraSelecionada = response.data;
-
-                // Carregar despesas se não estão em cache
                 if (!this.cacheDespesas[operadoraTop5.cnpj]) {
                     const despesasResponse = await axios.get(`${API_BASE_URL}/operadoras/${operadoraTop5.cnpj}/despesas`);
                     this.cacheDespesas[operadoraTop5.cnpj] = despesasResponse.data;
                 }
             } catch (error) {
-                console.error("Erro ao carregar detalhes:", error);
-                alert("Não foi possível encontrar os detalhes desta operadora.");
+                console.error("Erro:", error);
+                alert("Não foi possível encontrar detalhes.");
             } finally {
                 this.carregandoOperadora = false;
             }
@@ -241,15 +285,12 @@ createApp({
         fecharModal() {
             this.modalAberto = false;
             this.operadoraSelecionada = null;
-
-            // Restaura scroll da página
             document.body.style.overflow = 'auto';
         }
     },
     mounted() {
-        // Inicialização
         this.carregarStats();
-        // Carrega uma lista inicial para a tela não ficar vazia
+        this.carregarGrafico();
         this.buscarOperadoras(1);
     }
 }).mount('#app');

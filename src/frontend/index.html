@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monitoramento ANS | Intuitive Care</title>
-
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="icon" sizes="192x192"
         href="https://static.wixstatic.com/shapes/b91e09_ec91bf90beb448e39fbdf22214043a7f.svg" type="image/svg+xml">
 
@@ -45,7 +45,7 @@
             </div>
 
             <div v-else-if="erroStats" class="error-box">
-                <span>⚠️</span> {{ erroStats }}
+                <span></span> {{ erroStats }}
             </div>
 
             <div v-else class="stats-content">
@@ -78,6 +78,34 @@
                             </li>
                         </ul>
                     </div>
+
+                    <div class="card full-width" style="grid-column: 1 / -1; margin-top: 10px;">
+
+                        <div>
+                            <h3>Distribuição de Despesas por UF (Top 10)</h3>
+                            <div style="position: relative; height: 350px; width: 100%;">
+                                <canvas id="graficoUF"></canvas>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee;">
+                            <h3>Ranking Completo de UFs</h3>
+                            <div style="max-height: 400px; overflow-y: auto; padding-right: 5px;">
+                                <ul class="top5-list"
+                                    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;">
+                                    <li v-for="(item, idx) in dadosGrafico" :key="idx" class="top5-item"
+                                        style="font-size: 0.9em; border: 1px solid #eee; padding: 10px; border-radius: 8px;">
+                                        <span class="top5-rank" style="width: 25px; height: 25px; font-size: 0.8em;">{{
+                                            idx + 1 }}</span>
+                                        <span style="flex: 1; font-weight: bold; margin-left: 10px;">{{ item.uf
+                                            }}</span>
+                                        <span style="font-size: 0.9em;">{{ formatMoney(item.total) }}</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </main>
@@ -118,33 +146,6 @@
                     </div>
 
                     <div v-if="false" class="expenses-area">
-
-                        <div v-if="loadingDespesas[op.registro_ans]" class="loading-box" style="padding: 10px;">
-                            Carregando histórico financeiro...
-                        </div>
-
-                        <div v-else-if="cacheDespesas[op.cnpj] && cacheDespesas[op.cnpj].length > 0">
-                            <table class="expenses-table">
-                                <thead>
-                                    <tr>
-                                        <th>Ano</th>
-                                        <th>Trimestre</th>
-                                        <th>Valor Despesas</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="(d, idx) in cacheDespesas[op.cnpj]" :key="idx">
-                                        <td>{{ d.ano }}</td>
-                                        <td>{{ d.trimestre }}</td>
-                                        <td>{{ formatMoney(d.valor_despesas) }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div v-else class="loading-box" style="padding: 10px; font-size: 0.9em;">
-                            Esta operadora não reportou despesas assistenciais (Conta 411) neste período.
-                        </div>
                     </div>
                 </div>
             </div>
@@ -157,7 +158,6 @@
 
         </main>
 
-        <!-- MODAL DE DETALHES DA OPERADORA -->
         <div v-if="modalAberto" class="modal-overlay" @click="fecharModal">
             <div class="modal-content" @click.stop>
                 <div class="modal-header">
@@ -218,7 +218,6 @@
                 </div>
             </div>
         </div>
-        <!-- FOOTER -->
         <footer class="footer">
             <div class="footer-content">
                 <div class="footer-section">

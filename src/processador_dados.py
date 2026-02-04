@@ -35,7 +35,7 @@ def salvar_zip_com_dados(df1, df2, df3, caminho_zip):
 # Preparação dos Mapas (Lookup Tables)
 arquivo_operadoras_df = pd.read_csv(
     os.path.join(RAW_DIR, "Relatorio_cadop.csv"),
-    sep=",",
+    sep=";",
     encoding="utf-8-sig",
     dtype={"CNPJ": str},
 )

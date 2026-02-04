@@ -11,7 +11,7 @@ string_conexao = DB_CONNECTION
 get_engine = create_engine(string_conexao)
 
 # TABELA OPERADORAS
-df_operadoras = pd.read_csv(os.path.join(RAW_DIR, "Relatorio_cadop.csv"), sep=",", encoding="utf-8-sig")
+df_operadoras = pd.read_csv(os.path.join(RAW_DIR, "Relatorio_cadop.csv"), sep=";", encoding="utf-8-sig")
 
 df_operadoras_db = df_operadoras[["REGISTRO_OPERADORA", "CNPJ", "Razao_Social", "Modalidade", "UF"]].copy()
 

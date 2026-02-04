@@ -1,0 +1,125 @@
+{
+  "info": {
+    "_postman_id": "dc1f5576-d220-408c-ba36-a05ef59f3eb2",
+    "name": "Teste Intuitive Care - API Copy",
+    "description": "Coleção de testes para a API de Monitoramento de Operadoras ANS.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Listar Operadoras (Paginado)",
+      "id": "135c53a9-92f6-4f49-8b55-6aa4c8cf5a78",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/operadoras?page=1&limit=10",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "operadoras"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "2. Detalhes da Operadora (Por CNPJ)",
+      "id": "d923672e-af99-4537-adc9-8ffd11f29e7c",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/operadoras/00006037000127",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "operadoras",
+            "00006037000127"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "3. Histórico de Despesas",
+      "id": "6ec8447b-1fcc-4775-9033-4551a52ea2c9",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/operadoras/:cnpj/despesas\n",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "operadoras",
+            ":cnpj",
+            "despesas\n"
+          ],
+          "variable": [
+            {
+              "key": "cnpj",
+              "value": "4540010000170"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "4. Estatísticas Gerais (Dashboard)",
+      "id": "01769f16-0ad3-4f2b-9a3a-1fc6f175b0fe",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/estatisticas",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "estatisticas"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "New Request",
+      "id": "6fb19aa8-f942-4cc8-b342-2eea41c3e6bd",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": ""
+        }
+      },
+      "response": []
+    }
+  ]
+}

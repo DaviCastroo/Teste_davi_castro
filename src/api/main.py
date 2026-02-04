@@ -116,4 +116,28 @@ def get_estatisticas():
         "top_5": lista_top5
         }
 
+
+@app.get("/api/estatisticas/uf")
+def get_despesas_por_uf():
+    engine = get_engine 
+    
+    # Query agregada: Soma despesas por UF
+    sql = """
+        SELECT 
+            o.uf, 
+            SUM(d.valor_despesas) as total
+        FROM despesas d
+        JOIN operadoras o ON d.registro_ans = o.registro_ans
+        GROUP BY o.uf
+        ORDER BY total DESC
+    """
+    
+    try:
+        df = pd.read_sql(sql, engine)
+        # Retorna: [{"uf": "SP", "total": 1000}, {"uf": "RJ", "total": 500}...]
+        return df.to_dict(orient="records")
+    except Exception as e:
+        # Retorna lista vazia em caso de erro para não quebrar o front
+        return(f"Erro no gráfico: {e}")
+
 app.mount("/", StaticFiles(directory=FRONTEND_PATH, html=True), name="static")

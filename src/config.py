@@ -6,4 +6,4 @@ RAW_DIR = os.path.join(DATA_DIR, "raw")
 PROCESSED_DIR = os.path.join(DATA_DIR, "processed")
 FRONTEND_PATH = os.path.join(BASE_DIR, "src", "frontend")
 
-DB_CONNECTION = "postgresql://usuario:senha_banco@host:porta/nome_banco" #NORMALMENTE O HOST É LOCALHOST, E A PORTA PADRÃO É 5432
+DB_CONNECTION = "postgresql://postgres:86789787@localhost:5432/postgres" #NORMALMENTE O HOST É LOCALHOST, E A PORTA PADRÃO É 5432

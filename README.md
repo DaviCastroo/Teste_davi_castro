@@ -160,29 +160,77 @@ Durante o desenvolvimento, diversas decisões técnicas foram tomadas, considera
 ### 1. Processamento de Dados
 
 *   **Processamento de Arquivos (Memória vs. Incremental):** Optou-se por um **processamento incremental (chunking)** para arquivos grandes, utilizando `chunksize` no `pd.read_csv`. Isso evita o esgotamento de memória ao lidar com grandes volumes de dados, processando-os em blocos menores. [1]
+*   **Valores Zerados (R$ 0,00):** Diversas operadoras, especialmente da modalidade "Administradora de Benefícios", apresentaram despesas assistenciais zeradas na conta "411". Esses registros foram **mantidos**, pois empresas atuam na gestão administrativa de planos, repassando o risco assistencial (pagamento de sinistros) para operadoras parceiras. Remover esses dados ocultaria a realidade contábil dessas entidades. [2]
+*   **Valores Negativos (R$ -192580,57):** Foram detectados lançamentos negativos (ex: `-3.290.938,14`) em contas de despesa. Estes registro foram **mantidos**, pois representam estornos, glosas ou reversão de provisões técnicas de trimestres anteriores (Reversão de Provisão de Eventos Ocorridos e Não Avisados - PEONA). Ignorá-los causaria inconsistência no saldo anual consolidado.[3]
 *   **Tratamento de CNPJs Inválidos:** CNPJs inválidos são **removidos** dos dados. A justificativa é que dados inconsistentes podem comprometer a integridade das análises e a identificação correta das operadoras. 
-*   ** Para validar os CNPJs, foi utilizado a biblioteca **validate_docbr**, visando manter a simplicidade do código e utilizar das ferramentas que a linguágem oferece.** [2] 
-*   **Estratégia de Join:** Para o enriquecimento de dados, foi utilizado um `merge` do Pandas, que é eficiente para operações de join em memória. A escolha se baseia na premissa de que os arquivos de dados cadastrais das operadoras, embora possam ser grandes, são gerenciáveis em memória para essa operação específica. [3]
-*   **Estratégia de Agregação/Ordenação:** A agregação e ordenação são realizadas diretamente com as funcionalidades do Pandas (`groupby`, `agg`, `sort_values`), que são otimizadas para performance em conjuntos de dados tabulares. [4]
+*   ** Para validar os CNPJs, foi utilizado a biblioteca **validate_docbr**, visando manter a simplicidade do código e utilizar das ferramentas que a linguágem oferece.** [4]
+*   **Inconsistências de Cadastro:** Operadoras presentes no arquivo de despesas mas ausentes no CADOP foram importadas mantendo o vínculo financeiro, porém sinalizadas no banco de dados para auditoria futura. [5]
+*   **Estratégia de Join:** Para o enriquecimento de dados, foi utilizado um `merge` do Pandas, que é eficiente para operações de join em memória. A escolha se baseia na premissa de que os arquivos de dados cadastrais das operadoras, embora possam ser grandes, são gerenciáveis em memória para essa operação específica. [6]
+*   **Estratégia de Agregação/Ordenação:** A agregação e ordenação são realizadas diretamente com as funcionalidades do Pandas (`groupby`, `agg`, `sort_values`), que são otimizadas para performance em conjuntos de dados tabulares. [7]
 
 ### 2. Banco de Dados
 
-*   **Normalização:** Optou-se por **tabelas normalizadas separadas** (`despesas` e `operadoras`). Isso reduz a redundância de dados, melhora a integridade e facilita a manutenção, sendo mais adequado para sistemas onde a consistência e a flexibilidade de consulta são importantes, mesmo com um volume de dados crescente. [5]
+*   **Normalização:** Optou-se por **tabelas normalizadas separadas** (`despesas` e `operadoras`). Isso reduz a redundância de dados, melhora a integridade e facilita a manutenção, sendo mais adequado para sistemas onde a consistência e a flexibilidade de consulta são importantes, mesmo com um volume de dados crescente. [8]
+*   **Abordagem SQL (Query 3 - Operadoras Acima da Média):** Utilização de **CTEs (Common Table Expressions)** em vez de Subqueries aninhadas. Embora ambas tenham performance similar no PostgreSQL moderno, a CTE separa a lógica de cálculo da média trimestral da lógica de filtragem das operadoras. Isso aumenta drasticamente a **legibilidade** e **manutenibilidade** do código, facilitando futuras alterações nas regras de negócio. [9]
 *   **Tipos de Dados:**
-    *   **Valores Monetários:** Utilização de `DECIMAL` para valores monetários para garantir precisão, evitando problemas de arredondamento inerentes a `FLOAT`. [6]
-    *   **Datas:** Utilização de `DATETIME` para datas, para garantir a facilidade durante manipulação. [7]
-*   **Tratamento de Inconsistências na Importação:** Durante a importação, valores `NULL` em campos obrigatórios são tratados com valores padrão ou os registros são rejeitados, dependendo da criticidade. Strings em campos numéricos são convertidas ou os registros são marcados como inválidos. Datas inconsistentes são padronizadas ou os registros são sinalizados. A abordagem visa manter a qualidade dos dados no banco. [8]
+    *   **Valores Monetários:** Utilização de `DECIMAL` para valores monetários para garantir precisão, evitando problemas de arredondamento inerentes a `FLOAT`. [10]
+    *   **Datas:** Utilização de `DATETIME` para datas, para garantir a facilidade durante manipulação. [11]
+*   **Tratamento de Inconsistências na Importação:** Durante a importação, valores `NULL` em campos obrigatórios são tratados com valores padrão ou os registros são rejeitados, dependendo da criticidade. Strings em campos numéricos são convertidas ou os registros são marcados como inválidos. Datas inconsistentes são padronizadas ou os registros são sinalizados. A abordagem visa manter a qualidade dos dados no banco. [12]
 
 ### 3. API Backend
 
-*   **Escolha do Framework (FastAPI):** FastAPI foi escolhido por sua performance assíncrona, validação de dados automática com Pydantic, e geração de documentação interativa (Swagger UI/ReDoc) out-of-the-box, o que acelera o desenvolvimento e melhora a manutenibilidade. [9]
-*   **Estratégia de Paginação (Offset-based):** Implementada paginação baseada em `offset` e `limit` (`page`, `limit` parâmetros). Embora `cursor-based` seja mais escalável para grandes volumes, `offset-based` é mais simples de implementar e suficiente para a maioria dos casos, especialmente neste projeto. [10]
-*   **Cache vs. Queries Diretas para Estatísticas:** Para a rota `/api/estatisticas`, a opção de **calcular sempre na hora** foi adotada. Em um cenário de teste ou com volume de dados moderado, a complexidade de implementar cache pode não justificar o ganho de performance. Para um ambiente de produção com alta demanda, o cache ou pré-cálculo seria considerado. [11]
-*   **Estrutura de Resposta da API (Dados + Metadados):** As respostas da API para listagens incluem **dados e metadados** (`{data: [...], total: 100, page: 1, limit: 10}`). Isso fornece ao frontend informações essenciais para construir componentes de paginação e exibir o total de registros, melhorando a experiência do desenvolvedor frontend. [12]
+*   **Escolha do Framework (FastAPI):** FastAPI foi escolhido por sua performance assíncrona, validação de dados automática com Pydantic, e geração de documentação interativa (Swagger UI/ReDoc) out-of-the-box, o que acelera o desenvolvimento e melhora a manutenibilidade. [13]
+*   **Estratégia de Paginação (Offset-based):** Implementada paginação baseada em `offset` e `limit` (`page`, `limit` parâmetros). Embora `cursor-based` seja mais escalável para grandes volumes, `offset-based` é mais simples de implementar e suficiente para a maioria dos casos, especialmente neste projeto. [14]
+*   **Cache vs. Queries Diretas para Estatísticas:** Para a rota `/api/estatisticas`, a opção de **calcular sempre na hora** foi adotada. Em um cenário de teste ou com volume de dados moderado, a complexidade de implementar cache pode não justificar o ganho de performance. Para um ambiente de produção com alta demanda, o cache ou pré-cálculo seria considerado. [15]
+*   **Estrutura de Resposta da API (Dados + Metadados):** As respostas da API para listagens incluem **dados e metadados** (`{data: [...], total: 100, page: 1, limit: 10}`). Isso fornece ao frontend informações essenciais para construir componentes de paginação e exibir o total de registros, melhorando a experiência do desenvolvedor frontend. [16]
 
 ### 4. Frontend Web
 
-*   **Estratégia de Busca/Filtro (Busca no Servidor):** A busca e filtragem são realizadas no backend (`Busca no servidor`). Isso garante que o frontend sempre trabalhe com um conjunto de dados filtrado e paginado, evitando o carregamento de grandes volumes de dados no cliente e otimizando a performance para grandes bases de dados. [13]
-*   **Gerenciamento de Estado (Props/Events simples):** Para este projeto, a utilização de `Props/Events` simples do Vue.js é suficiente para gerenciar o estado entre componentes. Para aplicações maiores, Vuex/Pinia seriam considerados. [14]
-*   **Performance da Tabela:** A tabela é renderizada com paginação e carregamento sob demanda (lazy loading) para garantir boa performance mesmo com muitas operadoras. [15]
-*   **Tratamento de Erros e Loading:** O frontend exibe **mensagens de loading** durante as requisições à API e **mensagens de erro genéricas** em caso de falha. Para uma aplicação de produção, mensagens de erro mais específicas e amigáveis seriam implementadas. [16]
+*   **Estratégia de Busca/Filtro (Busca no Servidor):** A busca e filtragem são realizadas no backend (`Busca no servidor`). Isso garante que o frontend sempre trabalhe com um conjunto de dados filtrado e paginado, evitando o carregamento de grandes volumes de dados no cliente e otimizando a performance para grandes bases de dados. [17]
+*   **Gerenciamento de Estado (Props/Events simples):** Para este projeto, a utilização de `Props/Events` simples do Vue.js é suficiente para gerenciar o estado entre componentes. Para aplicações maiores, Vuex/Pinia seriam considerados. [18]
+*   **Performance da Tabela:** A tabela é renderizada com paginação e carregamento sob demanda (lazy loading) para garantir boa performance mesmo com muitas operadoras. [19]
+*   **Tratamento de Erros e Loading:** O frontend exibe **mensagens de loading** durante as requisições à API e **mensagens de erro genéricas** em caso de falha. Para uma aplicação de produção, mensagens de erro mais específicas e amigáveis seriam implementadas. [20]
+
+
+### 5. Decisões Técnicas SQL (Queries Analíticas)
+
+1.  **Cálculo de Crescimento (Query 1):**
+    * **Desafio:** Como tratar operadoras que não possuem dados em todos os trimestres?
+    * **Solução:** Utiliza-se `INNER JOIN` entre o 1º e o 3º trimestre.
+    * **Justificativa:** Para calcular uma taxa de crescimento percentual, é matematicamente obrigatório ter o ponto de partida e o de chegada. Operadoras que entraram ou saíram do mercado durante o ano não são comparáveis neste indicador específico. Também apliquei um filtro (`> 1000`) para evitar distorções de operadoras com despesas iniciais próximas a zero. [21]
+
+2.  **Média por UF (Query 2):**
+    * **Solução:** Cálculo manual `SUM(valor) / COUNT(DISTINCT operadora)`.
+    * **Justificativa:** A função `AVG()` padrão calcularia a média por *lançamento contábil*. O requisito pedia a média *por operadora*. Como uma operadora pode ter múltiplos lançamentos (ou apenas um consolidado), dividir o montante total pela contagem distinta de CNPJs/Registros fornece o indicador de negócio correto ("Ticket Médio da Operadora no Estado"). [22]
+
+3.  **Performance e Legibilidade (Query 3):**
+    * **Trade-off:** Subqueries no `WHERE` vs. CTEs (Common Table Expressions).
+    * **Escolha:** **CTEs**.
+    * **Justificativa:** A abordagem com CTEs permitiu quebrar o problema complexo em 3 etapas lógicas (calcular médias -> comparar -> agrupar). No PostgreSQL, isso facilita a leitura do código e a manutenção futura (ex: alterar a regra da média) sem sacrificar performance, já que o planejador de queries otimiza CTEs de forma eficiente. [23]
+
+4.  **Visualização de Dados (Gráfico de Despesas por UF):**
+
+Foi implementada uma seção de inteligência de mercado no Dashboard, exibindo a distribuição geográfica das despesas.
+
+* **Biblioteca:** [Chart.js](https://www.chartjs.org/) (via CDN).
+* **Componente:** Gráfico de Barras Verticais (`Bar Chart`) responsivo.
+* **Funcionalidades:**
+    * Exibição do volume total de despesas por Estado (UF).
+    * Listagem lateral com ranking completo e scroll infinito.
+    * Formatação monetária nativa (BRL) nos tooltips e legendas.
+    * Atualização dinâmica sem recarregar a página (SPA).[24]
+
+#### Decisões Técnicas (Trade-offs)
+
+1.  **Renderização no Cliente vs. Servidor (Chart.js):**
+    * **Escolha:** Renderização no cliente via `Canvas` (Chart.js).
+    * **Justificativa:** O Chart.js é extremamente performático para desenhar milhares de pontos de dados usando HTML5 Canvas (aceleração de GPU), sendo mais leve que bibliotecas baseadas em SVG (DOM) para este volume de dados. A integração via CDN manteve o projeto leve, sem necessidade de *build steps* complexos (Webpack/Vite).[25]
+
+2.  **Agregação de Dados (Backend First):**
+    * **Problema:** Calcular o total por UF no Frontend exigiria baixar todas as despesas (milhões de linhas) para o navegador, travando o dispositivo do usuário.
+    * **Solução:** Implementação do endpoint `/api/estatisticas/uf` que já retorna os dados agrupados (`GROUP BY uf`).
+    * **Benefício:** O tráfego de rede foi reduzido de ~50MB (dados brutos) para ~1KB (JSON sumarizado), garantindo carregamento instantâneo do gráfico.[26]
+
+3.  **UX do Gráfico (Top 10 vs. Completo):**
+    * **Decisão:** O gráfico exibe visualmente todas as UFs, mas a lista lateral permite detalhamento.
+    * **Justificativa:** Permite identificar rapidamente os *outliers* (estados com maiores gastos) visualmente, enquanto a lista lateral rolável oferece acesso preciso aos dados de estados com menor volume, mantendo a interface limpa.[27]
