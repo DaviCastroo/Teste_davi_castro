@@ -190,7 +190,7 @@ Durante o desenvolvimento, diversas decisões técnicas foram tomadas, considera
     1.  Certifique-se de que a API Backend está rodando (`http://localhost:8000`).
     2.  Abra o **Postman**.
     3.  Clique no botão **Import** (canto superior esquerdo).
-    4.  Arraste o arquivo `postman_collection.json` (localizado na pasta principal do projeto) para a janela de importação ou selecione-o manualmente.
+    4.  Arraste o arquivo `Teste Intuitive Care - API.json` (localizado na pasta principal do projeto) para a janela de importação ou selecione-o manualmente.
     5.  A coleção **"Teste Intuitive Care - API"** aparecerá na sua barra lateral contendo:
         * Listagem paginada.
         * Busca por filtros.
