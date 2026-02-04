@@ -179,6 +179,23 @@ Durante o desenvolvimento, diversas decisões técnicas foram tomadas, considera
 
 ### 3. API Backend
 
+    ## Como Testar a API (Postman)
+
+    Uma coleção completa com todas as rotas configuradas e exemplos de requisição foi incluída na raiz deste projeto para facilitar a avaliação.
+
+    * **Arquivo:** `postman_collection.json`
+
+    ### Passo a Passo para Importar:
+
+    1.  Certifique-se de que a API Backend está rodando (`http://localhost:8000`).
+    2.  Abra o **Postman**.
+    3.  Clique no botão **Import** (canto superior esquerdo).
+    4.  Arraste o arquivo `postman_collection.json` (localizado na pasta principal do projeto) para a janela de importação ou selecione-o manualmente.
+    5.  A coleção **"Teste Intuitive Care - API"** aparecerá na sua barra lateral contendo:
+        * Listagem paginada.
+        * Busca por filtros.
+        * Detalhamento de operadora.
+        * Estatísticas e dados para gráficos.
 *   **Escolha do Framework (FastAPI):** FastAPI foi escolhido por sua performance assíncrona, validação de dados automática com Pydantic, e geração de documentação interativa (Swagger UI/ReDoc) out-of-the-box, o que acelera o desenvolvimento e melhora a manutenibilidade. [13]
 *   **Estratégia de Paginação (Offset-based):** Implementada paginação baseada em `offset` e `limit` (`page`, `limit` parâmetros). Embora `cursor-based` seja mais escalável para grandes volumes, `offset-based` é mais simples de implementar e suficiente para a maioria dos casos, especialmente neste projeto. [14]
 *   **Cache vs. Queries Diretas para Estatísticas:** Para a rota `/api/estatisticas`, a opção de **calcular sempre na hora** foi adotada. Em um cenário de teste ou com volume de dados moderado, a complexidade de implementar cache pode não justificar o ganho de performance. Para um ambiente de produção com alta demanda, o cache ou pré-cálculo seria considerado. [15]

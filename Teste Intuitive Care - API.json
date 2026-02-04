@@ -1,14 +1,15 @@
 {
   "info": {
-    "_postman_id": "dc1f5576-d220-408c-ba36-a05ef59f3eb2",
-    "name": "Teste Intuitive Care - API Copy",
+    "_postman_id": "57b99a3f-d1aa-402b-b5fa-f7492b7eb35b",
+    "name": "Teste Intuitive Care - API",
     "description": "Coleção de testes para a API de Monitoramento de Operadoras ANS.",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "48150507",
+    "_collection_link": "https://go.postman.co/collection/48150507-57b99a3f-d1aa-402b-b5fa-f7492b7eb35b?source=collection_link"
   },
   "item": [
     {
       "name": "1. Listar Operadoras (Paginado)",
-      "id": "135c53a9-92f6-4f49-8b55-6aa4c8cf5a78",
       "request": {
         "method": "GET",
         "header": [],
@@ -39,7 +40,6 @@
     },
     {
       "name": "2. Detalhes da Operadora (Por CNPJ)",
-      "id": "d923672e-af99-4537-adc9-8ffd11f29e7c",
       "request": {
         "method": "GET",
         "header": [],
@@ -61,7 +61,6 @@
     },
     {
       "name": "3. Histórico de Despesas",
-      "id": "6ec8447b-1fcc-4775-9033-4551a52ea2c9",
       "request": {
         "method": "GET",
         "header": [],
@@ -90,7 +89,6 @@
     },
     {
       "name": "4. Estatísticas Gerais (Dashboard)",
-      "id": "01769f16-0ad3-4f2b-9a3a-1fc6f175b0fe",
       "request": {
         "method": "GET",
         "header": [],
@@ -110,14 +108,10 @@
       "response": []
     },
     {
-      "name": "New Request",
-      "id": "6fb19aa8-f942-4cc8-b342-2eea41c3e6bd",
+      "name": "5. Estatísticas por UF (Gráfico)",
       "request": {
         "method": "GET",
-        "header": [],
-        "url": {
-          "raw": ""
-        }
+        "header": []
       },
       "response": []
     }
